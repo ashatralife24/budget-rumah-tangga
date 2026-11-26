@@ -81,7 +81,7 @@ export const SEED_TARGETS = [
 // Tips hemat yang realistis untuk rumah tangga Indonesia.
 export const TIPS = [
   { title: 'Belanja pasar seminggu sekali', body: 'Satu kali belanja besar di pasar (sekitar Rp 400.000) lebih murah daripada jajan harian di minimarket. Buat daftar dulu, dan masak bekal dari bahan yang sama untuk 2–3 hari.' },
-  { title: 'Pisahkan uang begitu gajian masuk', body: 'Saat gaji Rp 8.000.000 masuk, langsung pindahkan Rp 1.000.000 ke rekening tabungan terpisah. Sisa Rp 7.000.000 itulah yang boleh dibelanjakan — bukan sebaliknya.' },
+  { title: 'Pisahkan uang begitu gajian masuk', body: 'Saat gaji Rp 8.000.000 masuk, langsung pindahkan Rp 1.000.000 ke rekening tabungan terpisah. Sisa Rp 7.650.000 (gaji + jualan online Rp 650.000, setelah tabungan) itulah yang boleh dibelanjakan — bukan sebaliknya.' },
   { title: 'Cek meteran listrik tiap minggu', body: 'Tagihan listrik keluarga ini Rp 385.000/bulan. Matikan dispenser dan kipas saat tidak dipakai, dan ganti lampu ke LED: hematnya bisa Rp 50.000–80.000 per bulan.' },
   { title: 'Atur batas ojek online', body: 'Ojek online mudah membengkak tanpa terasa. Batas Rp 200.000/bulan dan naik motor sendiri untuk jarak dekat bisa memangkas pengeluaran transport sampai sepertiga.' },
   { title: 'Satu hari tanpa belanja tiap minggu', body: 'Tetapkan satu hari “tanpa belanja” — masak dari stok kulkas dan pantry. Keluarga ini bisa menghemat sekitar Rp 150.000–200.000 per bulan dari kebiasaan ini saja.' },

@@ -7,7 +7,7 @@
 // transaksi, ubah anggaran, tambah tabungan) disimpan di localStorage dan
 // dipakai lagi saat halaman dibuka berikutnya.
 
-import { CATEGORIES, SEED_TRANSACTIONS, SEED_TARGETS } from './data.js';
+import { CATEGORIES, SEED_TRANSACTIONS, SEED_TARGETS, MONTHLY_HISTORY, LAST_MONTH_BY_CATEGORY } from './data.js';
 
 const STORAGE_KEY = 'brt-state-v1';
 
@@ -33,10 +33,72 @@ function freshState() {
     budgets: CATEGORIES.map((c) => ({ id: c.id, budget: c.budget })),
     targets: clone(SEED_TARGETS),
     nextId: 100,
+    month: '2026-11',
   };
 }
 
 let state = loadStored() || freshState();
+if (!state.month) state.month = '2026-11';
+
+// ---- Bulan yang sedang ditampilkan ("2026-11"). Semua hitungan hanya
+// memakai transaksi dari bulan ini, supaya transaksi bulan lain tidak
+// menggelembungkan total bulan yang ditampilkan.
+export function getMonth() {
+  return state.month;
+}
+
+export function setMonth(month) {
+  if (/^\d{4}-\d{2}$/.test(month)) {
+    state.month = month;
+    saveState();
+  }
+}
+
+export function monthsAvailable() {
+  const set = new Set(state.transactions.map((t) => t.date.slice(0, 7)));
+  set.add('2026-11');
+  return [...set].sort().reverse();
+}
+
+export function prevMonth(ym) {
+  const [y, m] = ym.split('-').map(Number);
+  const d = new Date(Date.UTC(y, m - 2, 1));
+  return d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0');
+}
+
+// Total bulan tertentu. Dihitung dari transaksi bila bulan itu punya
+// transaksi (jadi edit pengguna langsung terlihat); bila tidak ada, pakai
+// MONTHLY_HISTORY (Jul–Okt 2026, yang transaksinya tidak disimpan).
+export function monthTotals(ym) {
+  let income = 0;
+  let expense = 0;
+  for (const t of state.transactions) {
+    if (t.date.slice(0, 7) !== ym) continue;
+    if (t.kind === 'income') income += t.amount;
+    else expense += t.amount;
+  }
+  if (income || expense) return { income, expense };
+  const short = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+  const label = short[Number(ym.slice(5, 7)) - 1] + ' ' + ym.slice(0, 4);
+  const found = MONTHLY_HISTORY.find((h) => h.label === label);
+  if (found) return { income: found.income, expense: found.expense };
+  return { income: 0, expense: 0 };
+}
+
+// Pengeluaran satu kategori di satu bulan. Untuk Oktober 2026 pakai data
+// per kategori yang memang dicatat (LAST_MONTH_BY_CATEGORY); selebihnya
+// dihitung dari transaksi.
+export function categorySpentInMonth(categoryId, ym) {
+  if (ym === '2026-10') {
+    const row = LAST_MONTH_BY_CATEGORY.find((x) => x.id === categoryId);
+    return row ? row.spent : 0;
+  }
+  let spent = 0;
+  for (const t of state.transactions) {
+    if (t.kind === 'expense' && t.category === categoryId && t.date.slice(0, 7) === ym) spent += t.amount;
+  }
+  return spent;
+}
 
 export function saveState() {
   try {
@@ -53,8 +115,11 @@ export function resetState() {
   return state;
 }
 
-export function getTransactions() {
-  return state.transactions.slice().sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+export function getTransactions(month) {
+  const list = month
+    ? state.transactions.filter((t) => t.date.slice(0, 7) === month)
+    : state.transactions.slice();
+  return list.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
 }
 
 export function getBudgets() {
@@ -115,25 +180,17 @@ export function deleteTransaction(id) {
 }
 
 // ---- Hitungan: semua halaman memakai fungsi-fungsi ini. ----
+// totals() dan spentByCategory() memakai bulan yang sedang dipilih
+// (state.month); bulan lain tidak ikut menghitung.
 
 export function totals() {
-  let income = 0;
-  let expense = 0;
-  for (const t of state.transactions) {
-    if (t.kind === 'income') income += t.amount;
-    else expense += t.amount;
-  }
+  const { income, expense } = monthTotals(state.month);
   return { income, expense, remaining: income - expense };
 }
 
 export function spentByCategory() {
   const spent = {};
-  for (const c of CATEGORIES) spent[c.id] = 0;
-  for (const t of state.transactions) {
-    if (t.kind === 'expense' && t.category && spent[t.category] !== undefined) {
-      spent[t.category] += t.amount;
-    }
-  }
+  for (const c of CATEGORIES) spent[c.id] = categorySpentInMonth(c.id, state.month);
   return spent;
 }
 

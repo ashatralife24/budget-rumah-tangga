@@ -24,6 +24,22 @@ export function percent(spent, budget) {
   return Math.round((spent / budget) * 100);
 }
 
+// "November 2026" dari "2026-11".
+export function monthName(ym) {
+  const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+  const parts = String(ym).split('-');
+  if (parts.length !== 2) return String(ym);
+  return (months[Number(parts[1]) - 1] || '') + ' ' + parts[0];
+}
+
+// "Nov 2026" dari "2026-11".
+export function shortMonth(ym) {
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+  const parts = String(ym).split('-');
+  if (parts.length !== 2) return String(ym);
+  return (months[Number(parts[1]) - 1] || '') + ' ' + parts[0];
+}
+
 // "2 Nov 2026" dari "2026-11-02".
 export function shortDate(iso) {
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];

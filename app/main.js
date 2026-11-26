@@ -11,20 +11,30 @@
 // selesai, supaya skrip screenshot tahu kapan menangkap layar.
 
 import { home, transaksiPage, anggaranPage, laporanPage, targetPage, tipsPage, notFound } from './views.js';
-import { getTransactions, addTransaction, updateTransaction, deleteTransaction, setBudget, addToTarget, resetState, categorySummary } from './store.js';
-import { rupiah } from './format.js';
+import { getTransactions, addTransaction, updateTransaction, deleteTransaction, setBudget, addToTarget, resetState, categorySummary, getMonth, setMonth, prevMonth, categorySpentInMonth, getTargets } from './store.js';
+import { rupiah, escapeHtml, monthName } from './format.js';
 import { drawDonut, drawCompareBars, drawTrend } from './charts.js';
-import { CATEGORIES, MONTHLY_HISTORY, LAST_MONTH_BY_CATEGORY } from './data.js';
+import { CATEGORIES, MONTHLY_HISTORY } from './data.js';
 
 const app = document.getElementById('app');
 let editingId = null;
+let flash = null;
+
+function showError(form, message, field) {
+  const box = form.querySelector('.form-error');
+  if (box) {
+    box.textContent = message;
+    box.hidden = false;
+  }
+  if (field) field.focus();
+}
 
 function drawCharts(route) {
   if (route === '#/') {
     const donut = document.getElementById('donut');
     if (donut) {
       const cats = categorySummary();
-      drawDonut(donut, cats.map((c) => ({ value: c.spent, color: c.color })));
+      drawDonut(donut, cats.map((c) => ({ name: c.name, value: c.spent, color: c.color })));
     }
   }
   if (route === '#/laporan') {
@@ -33,10 +43,10 @@ function drawCharts(route) {
     const compare = document.getElementById('compare');
     if (compare) {
       const cats = categorySummary();
-      drawCompareBars(compare, cats.map((c) => {
-        const last = LAST_MONTH_BY_CATEGORY.find((x) => x.id === c.id);
-        return { name: c.name, now: c.spent, before: last ? last.spent : 0, color: c.color };
-      }));
+      const prev = prevMonth(getMonth());
+      drawCompareBars(compare, cats.map((c) => ({
+        name: c.name, now: c.spent, before: categorySpentInMonth(c.id, prev), color: c.color,
+      })));
     }
   }
 }
@@ -47,7 +57,7 @@ function render() {
   const route = hash.split('?')[0];
   let html;
   if (route === '#/' || route === '#') {
-    document.title = 'Budget Rumah Tangga — Keuangan Keluarga November 2026';
+    document.title = 'Budget Rumah Tangga — Keuangan Keluarga ' + monthName(getMonth());
     html = home();
   } else if (route === '#/transaksi') {
     document.title = 'Catat Transaksi | Budget Rumah Tangga';
@@ -69,7 +79,9 @@ function render() {
     document.title = 'Tidak ditemukan | Budget Rumah Tangga';
     html = notFound();
   }
-  app.innerHTML = html;
+  const notice = flash ? '<div class="flash" role="status">' + escapeHtml(flash) + '</div>' : '';
+  flash = null;
+  app.innerHTML = notice + html;
   drawCharts(route);
   window.scrollTo(0, 0);
   window.__shotReady = true;
@@ -88,10 +100,33 @@ app.addEventListener('submit', (event) => {
   if (form.id === 'tx-form') {
     const fields = readForm(form);
     const amount = Number(fields.amount);
-    if (!fields.date || !fields.note || !(amount > 0)) return;
+    const dateInput = form.querySelector('input[name="date"]');
+    const noteInput = form.querySelector('input[name="note"]');
+    const amountInput = form.querySelector('input[name="amount"]');
+    if (!fields.date || !/^\d{4}-\d{2}-\d{2}$/.test(fields.date)) {
+      showError(form, 'Pilih tanggal yang valid (format YYYY-MM-DD).', dateInput);
+      return;
+    }
+    if (!fields.note) {
+      showError(form, 'Isi dulu catatannya — mis. "Belanja pasar mingguan".', noteInput);
+      return;
+    }
+    if (!(amount > 0)) {
+      showError(form, 'Jumlah harus lebih dari Rp 0.', amountInput);
+      return;
+    }
+    if (amount > 100000000) {
+      showError(form, 'Jumlah di atas Rp 100.000.000 — periksa lagi angkanya.', amountInput);
+      return;
+    }
     const tx = { date: fields.date, kind: fields.kind, category: fields.category, note: fields.note, amount };
-    if (fields.id) updateTransaction(fields.id, tx);
-    else addTransaction(tx);
+    if (fields.id) {
+      updateTransaction(fields.id, tx);
+      flash = 'Transaksi "' + fields.note + '" berhasil diubah.';
+    } else {
+      addTransaction(tx);
+      flash = 'Transaksi "' + fields.note + '" (' + rupiah(amount) + ') berhasil ditambahkan.';
+    }
     editingId = null;
     render();
     return;
@@ -99,14 +134,42 @@ app.addEventListener('submit', (event) => {
   if (form.classList.contains('budget-form')) {
     const fields = readForm(form);
     const amount = Number(fields.budget);
-    if (amount >= 0) setBudget(form.dataset.category, amount);
+    const input = form.querySelector('input[name="budget"]');
+    if (!Number.isFinite(amount) || amount < 0) {
+      showError(form, 'Batas anggaran harus angka Rp 0 atau lebih.', input);
+      return;
+    }
+    setBudget(form.dataset.category, amount);
+    flash = 'Batas anggaran berhasil disimpan.';
     render();
     return;
   }
   if (form.classList.contains('save-form')) {
     const fields = readForm(form);
     const amount = Number(fields.amount);
-    if (amount > 0) addToTarget(form.dataset.target, amount);
+    const input = form.querySelector('input[name="amount"]');
+    if (!(amount > 0)) {
+      showError(form, 'Isi jumlah tabungan yang mau ditambahkan (lebih dari Rp 0).', input);
+      return;
+    }
+    addToTarget(form.dataset.target, amount);
+    flash = rupiah(amount) + ' berhasil ditambahkan ke tabungan.';
+    render();
+  }
+});
+
+// Dropdown kategori tidak berlaku untuk pemasukan: sembunyikan saat
+// Jenis = Pemasukan; pemilih bulan mengganti bulan yang ditampilkan.
+app.addEventListener('change', (event) => {
+  const target = event.target;
+  if (target.id === 'kind-select') {
+    const field = document.getElementById('category-field');
+    if (field) field.hidden = target.value === 'income';
+    return;
+  }
+  if (target.id === 'month-select') {
+    setMonth(target.value);
+    editingId = null;
     render();
   }
 });
@@ -114,6 +177,15 @@ app.addEventListener('submit', (event) => {
 app.addEventListener('click', (event) => {
   const button = event.target.closest('button');
   if (!button) return;
+  if (button.dataset.allocate) {
+    const target = button.dataset.allocate;
+    const amount = Number(button.dataset.amount);
+    const goal = getTargets().find((g) => g.id === target);
+    addToTarget(target, amount);
+    flash = rupiah(amount) + ' dialokasikan ke ' + (goal ? goal.name : 'tabungan') + '.';
+    render();
+    return;
+  }
   if (button.dataset.edit) {
     editingId = button.dataset.edit;
     render();
@@ -125,6 +197,7 @@ app.addEventListener('click', (event) => {
     const tx = getTransactions().find((t) => t.id === button.dataset.delete);
     if (tx && window.confirm('Hapus transaksi "' + tx.note + '" (' + rupiah(tx.amount) + ')?')) {
       deleteTransaction(tx.id);
+      flash = 'Transaksi "' + tx.note + '" dihapus.';
       render();
     }
     return;
@@ -138,6 +211,7 @@ app.addEventListener('click', (event) => {
     if (window.confirm('Kembalikan semua data ke contoh awal? Perubahan Anda akan hilang.')) {
       resetState();
       editingId = null;
+      flash = 'Data contoh sudah dikembalikan.';
       render();
     }
   }

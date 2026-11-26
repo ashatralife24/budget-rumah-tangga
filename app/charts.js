@@ -25,14 +25,16 @@ function text(ctx, str, x, y, size, color, align, weight) {
   ctx.fillText(str, x, y);
 }
 
-// Donat: porsi tiap kategori dari total pengeluaran, total di tengah.
+// Donat: porsi tiap kategori dari total pengeluaran, total di tengah,
+// tiap irisan berlabel nama + persentase di luar lingkaran supaya donat
+// tetap terbaca sebagai gambar (juga saat diperkecil di contact sheet).
 export function drawDonut(canvas, slices) {
-  const { ctx, width, height } = setup(canvas, 220);
+  const { ctx, width, height } = setup(canvas, 190);
   const total = slices.reduce((s, x) => s + x.value, 0);
   const cx = width / 2;
-  const cy = height / 2;
-  const outer = 92;
-  const inner = 58;
+  const cy = height / 2 + 4;
+  const outer = 70;
+  const inner = 44;
   if (!total) {
     ctx.beginPath();
     ctx.arc(cx, cy, outer, 0, Math.PI * 2);
@@ -50,6 +52,27 @@ export function drawDonut(canvas, slices) {
     ctx.closePath();
     ctx.fillStyle = slice.color;
     ctx.fill();
+    const share = slice.value / total;
+    if (share >= 0.04) {
+      const mid = angle + sweep / 2;
+      const dx = Math.cos(mid);
+      const dy = Math.sin(mid);
+      const x1 = cx + dx * (outer + 2);
+      const y1 = cy + dy * (outer + 2);
+      const x2 = cx + dx * (outer + 8);
+      const y2 = cy + dy * (outer + 8);
+      ctx.strokeStyle = '#9ca3af';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+      const align = dx > 0.25 ? 'left' : dx < -0.25 ? 'right' : 'center';
+      const lx = cx + dx * (outer + 12);
+      const ly = cy + dy * (outer + 12);
+      text(ctx, slice.name || '', lx, ly - 7, 11, '#374151', align, 600);
+      text(ctx, Math.round(share * 100) + '%', lx, ly + 7, 11, '#1f2937', align, 700);
+    }
     angle += sweep;
   }
   text(ctx, 'Total', cx, cy - 12, 12, '#6b7280', 'center');
@@ -58,7 +81,7 @@ export function drawDonut(canvas, slices) {
 
 // Batang horizontal: bulan ini vs bulan lalu, per kategori.
 export function drawCompareBars(canvas, rows) {
-  const rowH = 44;
+  const rowH = 50;
   const { ctx, width, height } = setup(canvas, rows.length * rowH + 34);
   const max = Math.max(1, ...rows.flatMap((r) => [r.now, r.before]));
   const labelW = 118;
